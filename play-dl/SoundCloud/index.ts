@@ -111,7 +111,7 @@ export async function stream(url: string, quality?: number): Promise<SoundCloudS
  * @returns client ID
  */
 export async function getFreeClientID(): Promise<string> {
-    const data = await request('https://soundcloud.com/');
+    const data = await request('https://soundcloud.com/', { headers: {} });
     const splitted = data.split('<script crossorigin src="');
     const urls: string[] = [];
     splitted.forEach((r) => {

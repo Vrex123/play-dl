@@ -231,7 +231,7 @@ export async function video_basic_info(url: string, options: InfoOptions = {}): 
         });
     }
     const rawChapters =
-        initial_response.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer?.decoratedPlayerBarRenderer.playerBar?.multiMarkersPlayerBarRenderer.markersMap.find(
+        initial_response.playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer?.decoratedPlayerBarRenderer.playerBar?.multiMarkersPlayerBarRenderer.markersMap?.find(
             (m: any) => m.key === 'DESCRIPTION_CHAPTERS'
         )?.value?.chapters;
     const chapters: VideoChapter[] = [];
@@ -284,7 +284,7 @@ export async function video_basic_info(url: string, options: InfoOptions = {}): 
         views: vid.viewCount,
         tags: vid.keywords,
         likes: parseInt(
-            likeRenderer?.toggleButtonRenderer?.defaultText.accessibility?.accessibilityData.label.replace(/\D+/g, '') ?? 
+            likeRenderer?.toggleButtonRenderer?.defaultText.accessibility?.accessibilityData.label.replace(/\D+/g, '') ??
             likeRenderer?.segmentedLikeDislikeButtonRenderer?.likeButton.toggleButtonRenderer?.defaultText.accessibility?.accessibilityData.label.replace(/\D+/g, '') ?? 0
         ),
         live: vid.isLiveContent,
@@ -542,7 +542,7 @@ export async function playlist_info(url: string, options: PlaylistOptions = {}):
             throw new Error(`While parsing playlist url\n${response.alerts[0].alertRenderer.text.runs[0].text}`);
         else throw new Error('While parsing playlist url\nUnknown Playlist Error');
     }
-    if (url_.indexOf('watch?v=') !== -1) {
+    if (url_.indexOf('watch?v=') !== -1 || url_.indexOf('youtu.be/') !== -1) {
         return getWatchPlaylist(response, body, url_);
     } else return getNormalPlaylist(response, body);
 }
