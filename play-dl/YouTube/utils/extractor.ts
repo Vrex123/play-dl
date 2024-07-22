@@ -20,7 +20,7 @@ const video_id_pattern = /^[a-zA-Z\d_-]{11,12}$/;
 const playlist_id_pattern = /^(PL|UU|LL|RD|OL)[a-zA-Z\d_-]{10,}$/;
 const DEFAULT_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
 const video_pattern =
-    /^((?:https?:)?\/\/)?(?:(?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|shorts\/|embed\/|v\/)?)([\w\-]+)(\S+)?$/;
+    /^((?:https?:)?\/\/)?(?:(?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|shorts\/|embed\/|live\/|v\/)?)([\w\-]+)(\S+)?$/;
 const playlist_pattern =
     /^((?:https?:)?\/\/)?(?:(?:www|m|music)\.)?((?:youtube\.com|youtu.be))\/(?:(playlist|watch))?(.*)?((\?|\&)list=)(PL|UU|LL|RD|OL)[a-zA-Z\d_-]{10,}(&.*)?$/;
 /**
@@ -81,6 +81,8 @@ function extractVideoId(urlOrId: string): string | false {
             id = urlOrId.split('youtube.com/embed/')[1].split(/(\?|\/|&)/)[0];
         } else if (urlOrId.includes('youtube.com/shorts/')) {
             id = urlOrId.split('youtube.com/shorts/')[1].split(/(\?|\/|&)/)[0];
+        } else if (urlOrId.includes('youtube.com/live/')) {
+            id = urlOrId.split('youtube.com/live/')[1].split(/(\?|\/|&)/)[0];
         } else {
             id = (urlOrId.split('watch?v=')[1] ?? urlOrId.split('&v=')[1]).split(/(\?|\/|&)/)[0];
         }
@@ -187,10 +189,9 @@ export async function video_basic_info(url: string, options: InfoOptions = {}): 
         } else if (player_response.playabilityStatus.status === 'LIVE_STREAM_OFFLINE') upcoming = true;
         else
             throw new Error(
-                `While getting info from url\n${
-                    player_response.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason.simpleText ??
-                    player_response.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText ??
-                    player_response.playabilityStatus.reason
+                `While getting info from url\n${player_response.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason.simpleText ??
+                player_response.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText ??
+                player_response.playabilityStatus.reason
                 }`
             );
     }
@@ -221,13 +222,13 @@ export async function video_basic_info(url: string, options: InfoOptions = {}): 
             if (!x.carouselLockupRenderer) return;
             const row = x.carouselLockupRenderer;
 
-            const song = row.videoLockup?.compactVideoRenderer.title.simpleText ?? row.videoLockup?.compactVideoRenderer.title.runs?.find((x:any) => x.text)?.text;
-            const metadata = row.infoRows?.map((info: any) => [info.infoRowRenderer.title.simpleText.toLowerCase(), ((info.infoRowRenderer.expandedMetadata ?? info.infoRowRenderer.defaultMetadata)?.runs?.map((i:any) => i.text).join("")) ?? info.infoRowRenderer.defaultMetadata?.simpleText ?? info.infoRowRenderer.expandedMetadata?.simpleText ?? ""]);
+            const song = row.videoLockup?.compactVideoRenderer.title.simpleText ?? row.videoLockup?.compactVideoRenderer.title.runs?.find((x: any) => x.text)?.text;
+            const metadata = row.infoRows?.map((info: any) => [info.infoRowRenderer.title.simpleText.toLowerCase(), ((info.infoRowRenderer.expandedMetadata ?? info.infoRowRenderer.defaultMetadata)?.runs?.map((i: any) => i.text).join("")) ?? info.infoRowRenderer.defaultMetadata?.simpleText ?? info.infoRowRenderer.expandedMetadata?.simpleText ?? ""]);
             const contents = Object.fromEntries(metadata ?? {});
             const id = row.videoLockup?.compactVideoRenderer.navigationEndpoint?.watchEndpoint.videoId
                 ?? row.infoRows?.find((x: any) => x.infoRowRenderer.title.simpleText.toLowerCase() == "song")?.infoRowRenderer.defaultMetadata.runs?.find((x: any) => x.navigationEndpoint)?.navigationEndpoint.watchEndpoint?.videoId;
 
-            music.push({song, url: id ? `https://www.youtube.com/watch?v=${id}` : null, ...contents})
+            music.push({ song, url: id ? `https://www.youtube.com/watch?v=${id}` : null, ...contents })
         });
     }
     const rawChapters =
@@ -295,15 +296,17 @@ export async function video_basic_info(url: string, options: InfoOptions = {}): 
     });
     let format = [];
     if (!upcoming) {
-        format.push(...(player_response.streamingData.formats ?? []));
-        format.push(...(player_response.streamingData.adaptiveFormats ?? []));
+        // TODO: Properly handle the formats, for now ignore and use iOS formats
+        //format.push(...(player_response.streamingData.formats ?? []));
+        //format.push(...(player_response.streamingData.adaptiveFormats ?? []));
 
         // get the formats for the android player for legacy videos
         // fixes the stream being closed because not enough data
         // arrived in time for ffmpeg to be able to extract audio data
-        if (parseAudioFormats(format).length === 0 && !options.htmldata) {
-            format = await getAndroidFormats(vid.videoId, cookieJar, body);
-        }
+        //if (parseAudioFormats(format).length === 0 && !options.htmldata) {
+        //    format = await getAndroidFormats(vid.videoId, cookieJar, body);
+        //}
+        format = await getIosFormats(vid.videoId, cookieJar, body);
     }
     const LiveStreamData = {
         isLive: video_details.live,
@@ -387,10 +390,9 @@ export async function video_stream_info(url: string, options: InfoOptions = {}):
         } else if (player_response.playabilityStatus.status === 'LIVE_STREAM_OFFLINE') upcoming = true;
         else
             throw new Error(
-                `While getting info from url\n${
-                    player_response.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason.simpleText ??
-                    player_response.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText ??
-                    player_response.playabilityStatus.reason
+                `While getting info from url\n${player_response.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason.simpleText ??
+                player_response.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText ??
+                player_response.playabilityStatus.reason
                 }`
             );
     }
@@ -402,15 +404,17 @@ export async function video_stream_info(url: string, options: InfoOptions = {}):
     };
     let format = [];
     if (!upcoming) {
-        format.push(...(player_response.streamingData.formats ?? []));
-        format.push(...(player_response.streamingData.adaptiveFormats ?? []));
+        // TODO: Properly handle the formats, for now ignore and use iOS formats
+        //format.push(...(player_response.streamingData.formats ?? []));
+        //format.push(...(player_response.streamingData.adaptiveFormats ?? []));
 
         // get the formats for the android player for legacy videos
         // fixes the stream being closed because not enough data
         // arrived in time for ffmpeg to be able to extract audio data
-        if (parseAudioFormats(format).length === 0 && !options.htmldata) {
-            format = await getAndroidFormats(player_response.videoDetails.videoId, cookieJar, body);
-        }
+        //if (parseAudioFormats(format).length === 0 && !options.htmldata) {
+        //    format = await getAndroidFormats(player_response.videoDetails.videoId, cookieJar, body);
+        //}
+        format = await getIosFormats(player_response.videoDetails.videoId, cookieJar, body);
     }
 
     const LiveStreamData = {
@@ -542,7 +546,7 @@ export async function playlist_info(url: string, options: PlaylistOptions = {}):
             throw new Error(`While parsing playlist url\n${response.alerts[0].alertRenderer.text.runs[0].text}`);
         else throw new Error('While parsing playlist url\nUnknown Playlist Error');
     }
-    if (url_.indexOf('watch?v=') !== -1 || url_.indexOf('youtu.be/') !== -1) {
+    if (response.currentVideoEndpoint) {
         return getWatchPlaylist(response, body, url_);
     } else return getNormalPlaylist(response, body);
 }
@@ -573,10 +577,9 @@ export function getPlaylistVideos(data: any, limit = Infinity): YouTubeVideo[] {
                 channel: {
                     id: info.shortBylineText.runs[0].navigationEndpoint.browseEndpoint.browseId || undefined,
                     name: info.shortBylineText.runs[0].text || undefined,
-                    url: `https://www.youtube.com${
-                        info.shortBylineText.runs[0].navigationEndpoint.browseEndpoint.canonicalBaseUrl ||
+                    url: `https://www.youtube.com${info.shortBylineText.runs[0].navigationEndpoint.browseEndpoint.canonicalBaseUrl ||
                         info.shortBylineText.runs[0].navigationEndpoint.commandMetadata.webCommandMetadata.url
-                    }`,
+                        }`,
                     icon: undefined
                 }
             })
@@ -629,7 +632,7 @@ async function acceptViewerDiscretion(
             },
             nextEndpoint: {
                 urlEndpoint: {
-                    url: `watch?v=${videoId}`
+                    url: `/watch?v=${videoId}&has_verified=1`
                 }
             },
             setControvercy: true
@@ -660,10 +663,9 @@ async function acceptViewerDiscretion(
 
     if (videoPageData[2].playerResponse.playabilityStatus.status !== 'OK')
         throw new Error(
-            `While getting info from url after trying to accept the discretion popup for video ${videoId}\n${
-                videoPageData[2].playerResponse.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason
-                    .simpleText ??
-                videoPageData[2].playerResponse.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText
+            `While getting info from url after trying to accept the discretion popup for video ${videoId}\n${videoPageData[2].playerResponse.playabilityStatus.errorScreen.playerErrorMessageRenderer?.reason
+                .simpleText ??
+            videoPageData[2].playerResponse.playabilityStatus.errorScreen.playerKavRenderer?.reason.simpleText
             }`
         );
 
@@ -678,7 +680,7 @@ async function acceptViewerDiscretion(
     return { streamingData };
 }
 
-async function getAndroidFormats(videoId: string, cookieJar: { [key: string]: string }, body: string): Promise<any[]> {
+async function getIosFormats(videoId: string, cookieJar: { [key: string]: string }, body: string): Promise<any[]> {
     const apiKey =
         body.split('INNERTUBE_API_KEY":"')[1]?.split('"')[0] ??
         body.split('innertubeApiKey":"')[1]?.split('"')[0] ??
@@ -689,8 +691,10 @@ async function getAndroidFormats(videoId: string, cookieJar: { [key: string]: st
         body: JSON.stringify({
             context: {
                 client: {
-                    clientName: 'ANDROID',
-                    clientVersion: '16.49',
+                    clientName: 'IOS',
+                    clientVersion: '19.09.3',
+                    deviceModel: 'iPhone16,1',
+                    userAgent: 'com.google.ios.youtube/19.09.3 (iPhone; CPU iPhone OS 17_5 like Mac OS X)',
                     hl: 'en',
                     timeZone: 'UTC',
                     utcOffsetMinutes: 0
@@ -705,7 +709,8 @@ async function getAndroidFormats(videoId: string, cookieJar: { [key: string]: st
         cookieJar
     });
 
-    return JSON.parse(response).streamingData.formats;
+    return JSON.parse(response).streamingData.adaptiveFormats;
+    //return JSON.parse(response).streamingData.formats;
 }
 
 function getWatchPlaylist(response: any, body: any, url: string): YouTubePlayList {
@@ -740,10 +745,9 @@ function getWatchPlaylist(response: any, body: any, url: string): YouTubePlayLis
         channel: {
             id: channel?.navigationEndpoint?.browseEndpoint?.browseId || null,
             name: channel?.text || null,
-            url: `https://www.youtube.com${
-                channel?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
+            url: `https://www.youtube.com${channel?.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
                 channel?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
-            }`,
+                }`,
             verified: Boolean(badge?.includes('verified')),
             artist: Boolean(badge?.includes('artist'))
         }
@@ -792,19 +796,18 @@ function getNormalPlaylist(response: any, body: any): YouTubePlayList {
         link: `https://www.youtube.com${data.title.runs[0].navigationEndpoint.commandMetadata.webCommandMetadata.url}`,
         channel: author
             ? {
-                  name: author.videoOwnerRenderer.title.runs[0].text,
-                  id: author.videoOwnerRenderer.title.runs[0].navigationEndpoint.browseEndpoint.browseId,
-                  url: `https://www.youtube.com${
-                      author.videoOwnerRenderer.navigationEndpoint.commandMetadata.webCommandMetadata.url ||
-                      author.videoOwnerRenderer.navigationEndpoint.browseEndpoint.canonicalBaseUrl
-                  }`,
-                  icons: author.videoOwnerRenderer.thumbnail.thumbnails ?? []
-              }
+                name: author.videoOwnerRenderer.title.runs[0].text,
+                id: author.videoOwnerRenderer.title.runs[0].navigationEndpoint.browseEndpoint.browseId,
+                url: `https://www.youtube.com${author.videoOwnerRenderer.navigationEndpoint.commandMetadata.webCommandMetadata.url ||
+                    author.videoOwnerRenderer.navigationEndpoint.browseEndpoint.canonicalBaseUrl
+                    }`,
+                icons: author.videoOwnerRenderer.thumbnail.thumbnails ?? []
+            }
             : {},
         thumbnail: data.thumbnailRenderer.playlistVideoThumbnailRenderer?.thumbnail.thumbnails.length
             ? data.thumbnailRenderer.playlistVideoThumbnailRenderer.thumbnail.thumbnails[
-                  data.thumbnailRenderer.playlistVideoThumbnailRenderer.thumbnail.thumbnails.length - 1
-              ]
+            data.thumbnailRenderer.playlistVideoThumbnailRenderer.thumbnail.thumbnails.length - 1
+            ]
             : null
     });
     return res;
@@ -831,10 +834,9 @@ function getWatchPlaylistVideos(data: any, limit = Infinity): YouTubeVideo[] {
                 channel: {
                     id: channel_info.navigationEndpoint.browseEndpoint.browseId || undefined,
                     name: channel_info.text || undefined,
-                    url: `https://www.youtube.com${
-                        channel_info.navigationEndpoint.browseEndpoint.canonicalBaseUrl ||
+                    url: `https://www.youtube.com${channel_info.navigationEndpoint.browseEndpoint.canonicalBaseUrl ||
                         channel_info.navigationEndpoint.commandMetadata.webCommandMetadata.url
-                    }`,
+                        }`,
                     icon: undefined
                 }
             })
